@@ -1,0 +1,158 @@
+stages:
+  - build
+  - codestyle
+  - test
+  - deploy
+
+run_build_cat:
+  stage: build
+  tags:
+    - build
+  script:
+    - |
+      if cd src/ && chmod +x tgbot.sh && cd cat/ && make s21_cat; then
+        echo "Билд прошел успешно"
+        exit_code=0 
+      else
+        echo "Билд прошел не успешно"
+        exit_code=1
+      fi
+      cd ..
+      ./tgbot.sh "$exit_code"
+      exit $exit_code
+  artifacts:
+    paths:
+      - src/cat
+    expire_in: 30 days
+
+run_build_grep:
+  stage: build
+  tags:
+    - build
+  script:
+    - |
+      if cd src/ && chmod +x tgbot.sh && cd grep/ && make s21_grep; then
+        echo "Билд прошел успешно"
+        exit_code=0 
+      else
+        echo "Билд прошел не успешно"
+        exit_code=1
+      fi
+      cd ..
+      ./tgbot.sh "$exit_code"
+      exit $exit_code
+  artifacts:
+    paths:
+      - src/grep
+    expire_in: 30 days
+
+run_codestyle_cat:
+  stage: codestyle
+  tags:
+    - codestyle
+  script:
+    - |
+      if cd src/ && chmod +x tgbot.sh && cd cat/ && clang-format -n -Werror *.c *.h; then
+        echo "Тест на кодстайл прошел успешно"
+        exit_code=0 
+      else
+        echo "Тест на кодстайл не прошел"
+        exit_code=1
+      fi
+      cd ..
+      ./tgbot.sh "$exit_code"
+      exit $exit_code
+  artifacts:
+    paths:
+      - src/cat
+
+run_codestyle_grep:
+  stage: codestyle
+  tags:
+    - codestyle
+  script:
+    - |
+      if cd src/ && chmod +x tgbot.sh && cd grep/ && clang-format -n -Werror *.c *.h; then
+        echo "Тест на кодстайл прошел успешно"
+        exit_code=0 
+      else
+        echo "Тест на кодстайл не прошел"
+        exit_code=1
+      fi
+      cd ..
+      ./tgbot.sh "$exit_code"
+      exit $exit_code
+  artifacts:
+    paths:
+      - src/grep
+  after_script:
+    - ./src/tgbot.sh $?
+
+run_test_cat:
+  stage: test
+  tags:
+    - test
+  needs:
+    - job: run_codestyle_cat
+      artifacts: true
+  script:
+    - echo "Запуска интеграционных тестов..."
+    - |
+      if cd src/ && chmod +x tgbot.sh && cd cat/ && make tests; then
+        echo "Все тесты прошли успешно пройдены"
+        exit_code=0
+      else
+        echo "Один или несколько тестов провалены"
+        exit_code=1
+      fi
+      cd ..
+      ./tgbot.sh "$exit_code"
+      exit $exit_code
+
+run_test_grep:
+  stage: test
+  tags:
+    - test
+  needs:
+    - job: run_codestyle_grep
+      artifacts: true
+  script:
+    - echo "Запуска интеграционных тестов..."
+    - |
+      if cd src/ && chmod +x tgbot.sh && cd grep && make tests; then
+        echo "Все тесты прошли успешно пройдены"
+        exit_code=0
+      else
+        echo "Один или несколько тестов провалены"
+        exit_code=1
+      fi
+      cd ..
+      ./tgbot.sh "$exit_code"
+      exit $exit_code
+
+deploy_to_vm:
+  stage: deploy
+  tags:
+    - deploy
+  needs:
+    - job: run_test_grep
+      artifacts: false
+    - job: run_test_cat
+      artifacts: false
+    - job: run_build_cat
+      artifacts: true
+    - job: run_build_grep
+      artifacts: true
+  script:
+    - echo "Начало деплоя...."
+    - |
+      if cd src/ && chmod +x tgbot.sh && chmod +x deploy.sh && ./deploy.sh; then
+        echo "Деплой прошел успешно"
+        exit_code=0
+      else
+        echo "Деплой прошел не успешно"
+        exit_code=1
+      fi
+      ./tgbot.sh "$exit_code"
+      exit $exit_code
+  when: manual

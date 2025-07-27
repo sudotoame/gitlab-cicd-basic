@@ -1,0 +1,5 @@
+Hello, world!
+Error: File not found.
+Warning: Low memory.
+Fatal error.
+No error here.
